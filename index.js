@@ -2,7 +2,7 @@ telegramApi = require('node-telegram-bot-api'),
 { fireBirdPool } = require('./firebird.js'),
 { pgPool } = require('./postgres.js'),
 schedule = require('node-schedule'),
-token = require('./token')
+{ token }= require('./token')
 
 morningRule = new schedule.RecurrenceRule()
 eveningRule = new schedule.RecurrenceRule()
