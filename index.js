@@ -1,7 +1,6 @@
-import { token } from "./token"
-import { fireBirdPool } from "./firebird"
-import { pgPool } from "./postgres"
-
+const { token }= require("./token")
+const { fireBirdPool } = require("./firebird")
+const { pgPool } = require("./postgres")
 const telegramApi = require('node-telegram-bot-api')
 const schedule = require('node-schedule')
 const morningRule = new schedule.RecurrenceRule()
