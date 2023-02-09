@@ -1,11 +1,11 @@
-telegramApi = require('node-telegram-bot-api'),
-{ fireBirdPool } = require('./firebird.js'),
-{ pgPool } = require('./postgres.js'),
-schedule = require('node-schedule'),
-{ token }= require('./token')
+import { token } from "./token"
+import { fireBirdPool } from "./firebird"
+import { pgPool } from "./postgres"
 
-morningRule = new schedule.RecurrenceRule()
-eveningRule = new schedule.RecurrenceRule()
+const telegramApi = require('node-telegram-bot-api')
+const schedule = require('node-schedule')
+const morningRule = new schedule.RecurrenceRule()
+const eveningRule = new schedule.RecurrenceRule()
 
 morningRule.dayOfWeek = [1, 2, 3, 4, 5]
 morningRule.hour = 8
@@ -17,7 +17,7 @@ eveningRule.minute = 30
 
 schedule.scheduleJob(morningRule, function() {
 	pgPool.connect((connErr, client, done) => {
-		if (connErr) apiRes.status(400).send(connErr.detail)
+		if (connErr) return console.log(connErr)
 		
 		const query = `select staff_id, chat_id from bot_info`
 		client
@@ -53,10 +53,10 @@ schedule.scheduleJob(morningRule, function() {
 									if (!dbDate && !dbTime)
 										return bot.sendMessage(user.chat_id, `Епрст чувак данные об утреннем событии в базе отсутствуют!`)
 									
-									const hours = String(dbTime.getHours()).padStart(2, '0')
-									const minutes = String(dbTime.getMinutes()).padStart(2, '0')
-									const day = String(dbDate.getDate()).padStart(2, '0')
-									const month = String(dbDate.getMonth() + 1).padStart(2, '0')
+									const hours = validPad(dbTime.getHours())
+									const minutes = validPad(dbTime.getMinutes())
+									const day = validPad(dbDate.getDate())
+									const month = validPad(dbDate.getMonth() + 1)
 									const year = dbDate.getFullYear()
 									const date = `${ day }.${ month }.${ year }`
 									
@@ -80,7 +80,7 @@ schedule.scheduleJob(morningRule, function() {
 
 schedule.scheduleJob(eveningRule, function() {
 	pgPool.connect((connErr, client, done) => {
-		if (connErr) apiRes.status(400).send(connErr.detail)
+		if (connErr) return console.log(connErr)
 		
 		const query = `select staff_id, chat_id from bot_info`
 		client
@@ -115,10 +115,10 @@ schedule.scheduleJob(eveningRule, function() {
 										if (!dbDate && !dbTime)
 											return bot.sendMessage(user.chat_id, `Епрст чувак данные о вечернем событии в базе отсутствуют!`)
 										
-										const hours = String(dbTime.getHours()).padStart(2, '0')
-										const minutes = String(dbTime.getMinutes()).padStart(2, '0')
-										const day = String(dbDate.getDate()).padStart(2, '0')
-										const month = String(dbDate.getMonth() + 1).padStart(2, '0')
+										const hours = validPad(dbTime.getHours())
+										const minutes = validPad(dbTime.getMinutes())
+										const day = validPad(dbDate.getDate())
+										const month = validPad(dbDate.getMonth() + 1)
 										const year = dbDate.getFullYear()
 										const date = `${ day }.${ month }.${ year }`
 										
@@ -206,7 +206,7 @@ bot.on('message', async msg => {
 	console.log(text)
 	//notes.push({ 'uid': userId, 'time': time, 'text': text });
 	
-	bot.sendMessage(userId, 'Отлично! Я обязательно напомню, если не сдохну :)');
+	bot.sendMessage(userId, 'Отлично! Я обязательно напомню:)');
 });*/
 
 bot.on('callback_query', async msg => {
@@ -214,16 +214,16 @@ bot.on('callback_query', async msg => {
 	const chatId = msg.message.chat.id;
 	
 	pgPool.connect((connErr, client, done) => {
-		if (connErr) apiRes.status(400).send(connErr.detail)
+		if (connErr) return bot.sendMessage(chatId, `Что то не при подключении к бд... беда!`)
 	
 		const query = `select staff_id from bot_info where tg_username = '${ msg.from.username }'`
 		client
 			.query(query)
 			.then(
 				result => {
+					done()
 					if (!result.rows.length) {
 						return bot.sendMessage(chatId, `Походу друг у тебя нет прав на пользование`)
-						done()
 					}
 					
 					const staffId = result.rows[0].staff_id
@@ -236,8 +236,8 @@ bot.on('callback_query', async msg => {
 								return bot.sendMessage(chatId, `Упс... при получении времени`)
 							}
 							
-							let orderType, msgType, checkDateEvent = 'and date_ev = current_date', today = ' сегодня', now = new Date()
-							let eveningDate = new Date()
+							let orderType, msgType, checkDateEvent = 'and date_ev = current_date', today = ' сегодня'
+							let eveningDate = new Date(), now = new Date()
 							eveningDate.setHours(17, 15)
 							
 							if (event === 'eveningEvent' && now <= eveningDate) {
@@ -267,24 +267,24 @@ bot.on('callback_query', async msg => {
 					                order by ${ orderType }`,
 								function(err, result) {
 									console.log(err)
-									if (err) return bot.sendMessage(chatId, `Упс... Ошибка при получении времени`)
 									console.log(result)
+									if (err) return bot.sendMessage(chatId, `Упс... Ошибка при получении времени`)
+									
 									let dbDate = new Date(result[0].DATE_EV)
 									let dbTime = new Date(result[0].TIME_EV)
 									
 									if (!dbDate && !dbTime)
 										return bot.sendMessage(chatId, `Епрст... Данные в базе на сегодня отсутствуют`)
 									
-									const hours = String(dbTime.getHours()).padStart(2, '0')
-									const minutes = String(dbTime.getMinutes()).padStart(2, '0')
-									const day = String(dbDate.getDate()).padStart(2, '0')
-									const month = String(dbDate.getMonth() + 1).padStart(2, '0')
+									const hours = validPad(dbTime.getHours())
+									const minutes = validPad(dbTime.getMinutes())
+									const day = validPad(dbDate.getDate())
+									const month = validPad(dbDate.getMonth() + 1)
 									const year = dbDate.getFullYear()
 									const date = `${ day }.${ month }.${ year }`
 									
 									bot.sendMessage(chatId, `Твое ${ msgType } время${ today }: ${ hours }:${ minutes } ${ date }`)
 									db.detach()
-									done()
 								})
 						});
 					}
@@ -332,12 +332,12 @@ bot.on('callback_query', async msg => {
 								}
 							}
 							
-							hours = String(hours).padStart(2, '0')
-							minutes = String(minutes).padStart(2, '0')
-							seconds = String(seconds).padStart(2, '0')
+							hours = validPad(hours)
+							minutes = validPad(minutes)
+							seconds = validPad(seconds)
 							
-							let day = String(today.getDate()).padStart(2, '0')
-							let month = String(today.getMonth() + 1).padStart(2, '0')
+							let day = validPad(today.getDate())
+							let month = validPad(today.getMonth() + 1)
 							let year = today.getFullYear()
 							let timeEv = `${ hours }:${ minutes }:${ seconds }`
 							let dateEv = `${ day }.${ month }.${ year }`
@@ -384,12 +384,11 @@ bot.on('callback_query', async msg => {
 							
 							db.query(query,
 								function(err, result) {
-									//console.log(err)
+									console.log(err)
 									if (err) return bot.sendMessage(chatId, `Упс... Ошибка при создании события`)
 									
 									bot.sendMessage(chatId, `Успешный успех! Время ${ timeEv } ${ dateEv }`)
 									db.detach()
-									done()
 								}
 							)
 							
@@ -397,6 +396,7 @@ bot.on('callback_query', async msg => {
 					}
 				})
 			.catch(e => {
+				console.log(e)
 				done()
 				return bot.sendMessage(chatId, `Что то пошло не так при идентификации... сорян`)
 			})
@@ -406,4 +406,8 @@ bot.on('callback_query', async msg => {
 
 function getRandom(min, max) {
 	return Math.floor(Math.random()  * (max - min)) + min
+}
+
+function validPad(num) {
+	return String(num).padStart(2, '0')
 }
