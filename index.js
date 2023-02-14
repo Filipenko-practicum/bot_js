@@ -1,4 +1,4 @@
-const { token }= require("./token")
+const { token } = require("./token")
 const { fireBirdPool } = require("./firebird")
 const { pgPool } = require("./postgres")
 const telegramApi = require('node-telegram-bot-api')
@@ -27,8 +27,8 @@ schedule.scheduleJob(morningRule, function() {
 					for (let user of result.rows) {
 						
 						fireBirdPool.get(function(err, db) {
+							console.log('Утренняя проверка')
 							if (err) {
-								console.log('Утренняя проверка')
 								console.log(err)
 								return bot.sendMessage(user.chat_id, `Что то пошло не так при утренней проверке... сорян`)
 							}
@@ -45,22 +45,16 @@ schedule.scheduleJob(morningRule, function() {
 							db.query(query,
 								function(err, result) {
 									if (err) return bot.sendMessage(user.chat_id, `Упс ...Ошибка при получении утреннего события`)
+									if (!result.length) return bot.sendMessage(user.chat_id, `Епрст чувак данные об утреннем событии в базе отсутствуют!`)
 									
 									let dbDate = new Date(result[0].DATE_EV)
 									let dbTime = new Date(result[0].TIME_EV)
 									
-									if (!dbDate && !dbTime)
-										return bot.sendMessage(user.chat_id, `Епрст чувак данные об утреннем событии в базе отсутствуют!`)
-									
 									const hours = validPad(dbTime.getHours())
 									const minutes = validPad(dbTime.getMinutes())
-									const day = validPad(dbDate.getDate())
-									const month = validPad(dbDate.getMonth() + 1)
-									const year = dbDate.getFullYear()
-									const date = `${ day }.${ month }.${ year }`
 									
 									hours <= 8 && minutes <= 30
-										? bot.sendMessage(user.chat_id, `Выдыхай! Твое утреннее время сегодня: ${ hours }:${ minutes } ${ date } Все четко!`)
+										? bot.sendMessage(user.chat_id, `Выдыхай! Твое утреннее время сегодня: ${ getTime(dbTime) } ${ getDate(dbDate) } Все четко!`)
 										: bot.sendMessage(user.chat_id, `Епрст чувак данные об утреннем событии отсутствуют!`)
 									
 									db.detach()
@@ -89,8 +83,8 @@ schedule.scheduleJob(eveningRule, function() {
 						done()
 						for (let user of result.rows) {
 							fireBirdPool.get(function(err, db) {
+								console.log('Вечерняя проверка')
 								if (err) {
-									console.log('Вечерняя проверка')
 									console.log(err)
 									return bot.sendMessage(user.chat_id, `Что то пошло не так при вечерней проверке... сорян`)
 								}
@@ -107,23 +101,24 @@ schedule.scheduleJob(eveningRule, function() {
 								db.query(query,
 									function(err, result) {
 										if (err) return bot.sendMessage(user.chat_id, `Упс ...Ошибка при получении вечернего события`)
+										if (!result.length) return bot.sendMessage(user.chat_id, `Епрст чувак данные о вечернем событии в базе отсутствуют!`)
 										
 										let dbDate = new Date(result[0].DATE_EV)
 										let dbTime = new Date(result[0].TIME_EV)
 										
-										if (!dbDate && !dbTime)
-											return bot.sendMessage(user.chat_id, `Епрст чувак данные о вечернем событии в базе отсутствуют!`)
-										
+										const dayOfWeek = dbTime.getDay()
 										const hours = validPad(dbTime.getHours())
 										const minutes = validPad(dbTime.getMinutes())
-										const day = validPad(dbDate.getDate())
-										const month = validPad(dbDate.getMonth() + 1)
-										const year = dbDate.getFullYear()
-										const date = `${ day }.${ month }.${ year }`
 										
-										hours >= 17 && minutes >= 15
-											? bot.sendMessage(user.chat_id, `Выдыхай! Твое вечернее время сегодня: ${ hours }:${ minutes } ${ date } Все четко!`)
-											: bot.sendMessage(user.chat_id, `Епрст чувак данные о вечернем событии отсутствуют!`)
+										if (dayOfWeek !== 5) {
+											hours >= 17 && minutes >= 15
+												? bot.sendMessage(user.chat_id, `Выдыхай! Твое вечернее время сегодня: ${ getTime(dbTime) } ${ getDate(dbDate) } Все четко!`)
+												: bot.sendMessage(user.chat_id, `Епрст чувак данные о вечернем событии отсутствуют!`)
+										} else {
+											hours >= 16 && minutes >= 0
+												? bot.sendMessage(user.chat_id, `Выдыхай! Твое вечернее время сегодня: ${ getTime(dbTime) } ${ getDate(dbDate) } Все четко!`)
+												: bot.sendMessage(user.chat_id, `Епрст чувак данные о вечернем событии отсутствуют!`)
+										}
 										
 										db.detach()
 									}
@@ -203,14 +198,13 @@ bot.on('message', async msg => {
 	let userId = msg.from.id;
 	let text = match[1];
 	console.log(text)
-	//notes.push({ 'uid': userId, 'time': time, 'text': text });
-	
-	bot.sendMessage(userId, 'Отлично! Я обязательно напомню:)');
+	bot.sendMessage(userId, '!');
 });*/
 
 bot.on('callback_query', async msg => {
 	const event = msg.data;
 	const chatId = msg.message.chat.id;
+	console.log(msg.from.username)
 	
 	pgPool.connect((connErr, client, done) => {
 		if (connErr) return bot.sendMessage(chatId, `Что то не при подключении к бд... беда!`)
@@ -221,16 +215,18 @@ bot.on('callback_query', async msg => {
 			.then(
 				result => {
 					done()
-					if (!result.rows.length) {
-						return bot.sendMessage(chatId, `Походу друг у тебя нет прав на пользование`)
-					}
+					if (!result.rows.length) return bot.sendMessage(chatId, `Походу друг у тебя нет прав на пользование`)
 					
 					const staffId = result.rows[0].staff_id
 					
+					console.log(new Date())
+					console.log(event)
+					
 					if (event === 'morningEvent' || event === 'eveningEvent' || event === 'lastEvent') {
+						
 						fireBirdPool.get(function(err, db) {
+							console.log(event)
 							if (err) {
-								console.log(event)
 								console.log(err)
 								return bot.sendMessage(chatId, `Упс... при получении времени`)
 							}
@@ -267,22 +263,13 @@ bot.on('callback_query', async msg => {
 								function(err, result) {
 									console.log(err)
 									console.log(result)
-									if (err) return bot.sendMessage(chatId, `Упс... Ошибка при получении времени`)
+									if (err) return bot.sendMessage(chatId, `Упс... Ошибка при получении времени из базы`)
+									if (!result.length) return bot.sendMessage(chatId, `Епрст... Данные в базе на сегодня отсутствуют`)
 									
 									let dbDate = new Date(result[0].DATE_EV)
 									let dbTime = new Date(result[0].TIME_EV)
 									
-									if (!dbDate && !dbTime)
-										return bot.sendMessage(chatId, `Епрст... Данные в базе на сегодня отсутствуют`)
-									
-									const hours = validPad(dbTime.getHours())
-									const minutes = validPad(dbTime.getMinutes())
-									const day = validPad(dbDate.getDate())
-									const month = validPad(dbDate.getMonth() + 1)
-									const year = dbDate.getFullYear()
-									const date = `${ day }.${ month }.${ year }`
-									
-									bot.sendMessage(chatId, `Твое ${ msgType } время${ today }: ${ hours }:${ minutes } ${ date }`)
+									bot.sendMessage(chatId, `Твое ${ msgType } время${ today }: ${ getTime(dbTime) } ${ getDate(dbDate) }`)
 									db.detach()
 								})
 						});
@@ -291,7 +278,6 @@ bot.on('callback_query', async msg => {
 					if (event === 'createEvent') {
 						fireBirdPool.get(function(err, db) {
 							if (err) {
-								console.log(event)
 								console.log(err)
 								return bot.sendMessage(chatId, `Упс... Ошибка при создании события`)
 							}
@@ -334,12 +320,9 @@ bot.on('callback_query', async msg => {
 							hours = validPad(hours)
 							minutes = validPad(minutes)
 							seconds = validPad(seconds)
-							
-							let day = validPad(today.getDate())
-							let month = validPad(today.getMonth() + 1)
-							let year = today.getFullYear()
+						
 							let timeEv = `${ hours }:${ minutes }:${ seconds }`
-							let dateEv = `${ day }.${ month }.${ year }`
+							let dateEv = getDate(today)
 							
 							console.log(timeEv, dateEv)
 							
@@ -409,4 +392,18 @@ function getRandom(min, max) {
 
 function validPad(num) {
 	return String(num).padStart(2, '0')
+}
+
+function getDate(date) {
+	const day = validPad(date.getDate())
+	const month = validPad(date.getMonth() + 1)
+	const year = date.getFullYear()
+	return `${ day }.${ month }.${ year }`
+}
+
+function getTime(date) {
+	const hours = validPad(date.getHours())
+	const minutes = validPad(date.getMinutes())
+	const seconds = validPad(date.getSeconds())
+	return `${ hours }:${ minutes }:${ seconds }`
 }
