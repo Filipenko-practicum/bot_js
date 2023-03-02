@@ -49,8 +49,12 @@ schedule.scheduleJob(morningRule, function() {
 							
 							db.query(query,
 								function(err, result) {
-									if (err) return bot.sendMessage(user.chat_id, `Упс ...Ошибка при получении утреннего события`)
-									if (!result.length) return bot.sendMessage(user.chat_id, `Епрст чувак данные об утреннем событии в базе отсутствуют!`)
+									db.detach()
+									if (err)
+										return bot.sendMessage(user.chat_id, `Упс ...Ошибка при получении утреннего события`)
+									
+									if (!result.length)
+										return bot.sendMessage(user.chat_id, `Епрст чувак данные об утреннем событии в базе отсутствуют!`)
 									
 									let dbDate = new Date(result[0].DATE_EV)
 									let dbTime = new Date(result[0].TIME_EV)
@@ -62,7 +66,6 @@ schedule.scheduleJob(morningRule, function() {
 										? bot.sendMessage(user.chat_id, `Выдыхай! Твое утреннее время сегодня: ${ getTime(dbTime) } ${ getDate(dbDate) } Все четко!`)
 										: bot.sendMessage(user.chat_id, `Епрст чувак данные об утреннем событии отсутствуют!`)
 									
-									db.detach()
 								}
 							)
 						})
@@ -168,38 +171,36 @@ bot.on('callback_query', async msg => {
 					
 					if (event === 'morningEvent' || event === 'eveningEvent' || event === 'lastEvent') {
 						
+						let orderType, msgType, checkDateEvent = 'and date_ev = current_date', today = ' сегодня'
+						let eveningDate = new Date(), now = new Date()
+						eveningDate.setHours(17, 15)
+						let dayOfWeekNow = now.getDay()
+						
+						if (event === 'eveningEvent' && now <= eveningDate) {
+							return bot.sendMessage(chatId, `Чувак, день еще не закончен`)
+						}
+						
+						if (event !== 'lastEvent' && (dayOfWeekNow === 6 || dayOfWeekNow === 0)) {
+							return bot.sendMessage(chatId, `Выходные же... че балуешься`)
+						}
+						
+						if (event === 'morningEvent') {
+							orderType = 'time_ev'
+							msgType = 'утреннее'
+						} else if (event === 'eveningEvent'){
+							orderType = 'id_reg desc'
+							msgType = 'вечернее'
+						} else {
+							orderType = 'id_reg desc'
+							msgType = 'последнее'
+							checkDateEvent = ''
+							today = ''
+						}
+						
 						fireBirdPool.get(function(err, db) {
 							if (err) {
 								console.log(err)
 								return bot.sendMessage(chatId, `Упс... отсутствует подключение к бд`)
-							}
-							
-							let orderType, msgType, checkDateEvent = 'and date_ev = current_date', today = ' сегодня'
-							let eveningDate = new Date(), now = new Date()
-							eveningDate.setHours(17, 15)
-							let dayOfWeekNow = now.getDay()
-							
-							if (event === 'eveningEvent' && now <= eveningDate) {
-								db.detach()
-								return bot.sendMessage(chatId, `Чувак, день еще не закончен`)
-							}
-							
-							if (event !== 'lastEvent' && (dayOfWeekNow === 6 || dayOfWeekNow === 0)) {
-								db.detach()
-								return bot.sendMessage(chatId, `Выходные же... че балуешься`)
-							}
-							
-							if (event === 'morningEvent') {
-								orderType = 'time_ev'
-								msgType = 'утреннее'
-							} else if (event === 'eveningEvent'){
-								orderType = 'id_reg desc'
-								msgType = 'вечернее'
-							} else {
-								orderType = 'id_reg desc'
-								msgType = 'последнее'
-								checkDateEvent = ''
-								today = ''
 							}
 							
 							db.query(`select first 1
@@ -211,75 +212,74 @@ bot.on('callback_query', async msg => {
 					                ${ checkDateEvent }
 					                order by ${ orderType }`,
 								function(err, result) {
+									db.detach()
 									if (err) {
 										console.log(err)
-										db.detach()
 										return bot.sendMessage(chatId, `Упс... Ошибка при получении времени из базы`)
 									}
-									console.log(result)
-									if (!result.length)
+									
+									if (!result.length) {
 										return bot.sendMessage(chatId, `Епрст... Данные в базе на сегодня отсутствуют`)
+									}
 									
 									let dbDate = new Date(result[0].DATE_EV)
 									let dbTime = new Date(result[0].TIME_EV)
-									db.detach()
+									console.log(`Найденное время ${ getTime(dbTime) } ${ getDate(dbDate) }`)
 									
 									return bot.sendMessage(
 										chatId,
-										`Твое ${ msgType } время${ today }: ${ getTime(dbTime) } ${ getDate(dbDate) }`)
+										`Твое ${ msgType } время ${ today }: ${ getTime(dbTime) } ${ getDate(dbDate) }`)
 								})
 						});
 					}
 					
 					if (event === 'createEvent') {
+						let today = new Date()
+						let hoursNow = today.getHours()
+						let minutesNow = today.getMinutes()
+						let secondsNow = today.getSeconds()
+						let dayOfWeekNow = today.getDay()
+						let hours = hoursNow, minutes = minutesNow, seconds = secondsNow
+						//console.log(dayOfWeekNow, hoursNow, minutesNow, secondsNow)
+						
+						if (hoursNow >= 8 && hoursNow <= 9) {
+							hours = 8
+							if (minutesNow > 25) {
+								minutes = getRandom(20, 25)
+								seconds = getRandom(5, 55)
+							}
+						} else {
+							if (dayOfWeekNow >= 1 && dayOfWeekNow <= 4) {
+								if  (hoursNow > 17 || (hoursNow === 17 && minutesNow > 20)) {
+									hours = 17
+									minutes = getRandom(20, 35)
+									seconds = getRandom(5, 55)
+								}
+							} else if (dayOfWeekNow === 5) {
+								if  (hoursNow > 16 || (hoursNow === 16 && minutesNow > 5)) {
+									hours = 16
+									minutes = getRandom(5, 15)
+									seconds = getRandom(5, 55)
+								}
+							} else {
+								return bot.sendMessage(chatId, `Выходные же... че балуешься`)
+							}
+						}
+						
+						hours = validPad(hours)
+						minutes = validPad(minutes)
+						seconds = validPad(seconds)
+						
+						let timeEv = `${ hours }:${ minutes }:${ seconds }`
+						let dateEv = getDate(today)
+						
+						console.log(`Сгенерированное время для события ${ timeEv }  ${ dateEv }`)
+						
 						fireBirdPool.get(function(err, db) {
 							if (err) {
 								console.log(err)
 								return bot.sendMessage(chatId, `Упс... отсутствует подключение к бд`)
 							}
-							
-							let today = new Date()
-							let hoursNow = today.getHours()
-							let minutesNow = today.getMinutes()
-							let secondsNow = today.getSeconds()
-							let dayOfWeekNow = today.getDay()
-							let hours = hoursNow, minutes = minutesNow, seconds = secondsNow
-							
-							console.log(dayOfWeekNow, hoursNow, minutesNow, secondsNow)
-							
-							if (hoursNow >= 8 && hoursNow <= 9) {
-								hours = 8
-								if (minutesNow > 25) {
-									minutes = getRandom(20, 25)
-									seconds = getRandom(5, 55)
-								}
-							} else {
-								if (dayOfWeekNow >= 1 && dayOfWeekNow <= 4) {
-									if  (hoursNow > 17 || (hoursNow === 17 && minutesNow > 20)) {
-										hours = 17
-										minutes = getRandom(20, 35)
-										seconds = getRandom(5, 55)
-									}
-								} else if (dayOfWeekNow === 5) {
-									if  (hoursNow > 16 || (hoursNow === 16 && minutesNow > 5)) {
-										hours = 16
-										minutes = getRandom(5, 15)
-										seconds = getRandom(5, 55)
-									}
-								} else {
-									db.detach()
-									return bot.sendMessage(chatId, `Выходные же... че балуешься`)
-								}
-							}
-							
-							hours = validPad(hours)
-							minutes = validPad(minutes)
-							seconds = validPad(seconds)
-						
-							let timeEv = `${ hours }:${ minutes }:${ seconds }`
-							let dateEv = getDate(today)
-							
-							console.log(timeEv, dateEv)
 							
 							let query = `INSERT INTO REG_EVENTS (
 									INNER_NUMBER_EV,
@@ -319,11 +319,11 @@ bot.on('callback_query', async msg => {
 							
 							db.query(query,
 								function(err, result) {
+									db.detach()
 									if (err) {
 										console.log(err)
 										return bot.sendMessage(chatId, `Упс... Ошибка при создании события`)
 									}
-									db.detach()
 									return bot.sendMessage(chatId, `Успешный успех! Время ${ timeEv } ${ dateEv }`)
 								}
 							)
@@ -369,8 +369,12 @@ const checkEveningEvent = () => {
 							
 							db.query(query,
 								function(err, result) {
-									if (err) return bot.sendMessage(user.chat_id, `Упс ...Ошибка при получении вечернего события`)
-									if (!result.length) return bot.sendMessage(user.chat_id, `Епрст чувак данные о вечернем событии в базе отсутствуют!`)
+									db.detach()
+									if (err)
+										return bot.sendMessage(user.chat_id, `Упс ...Ошибка при получении вечернего события`)
+									
+									if (!result.length)
+										return bot.sendMessage(user.chat_id, `Епрст чувак данные о вечернем событии в базе отсутствуют!`)
 									
 									let dbDate = new Date(result[0].DATE_EV)
 									let dbTime = new Date(result[0].TIME_EV)
@@ -388,8 +392,6 @@ const checkEveningEvent = () => {
 											? bot.sendMessage(user.chat_id, `Выдыхай! Твое вечернее время сегодня: ${ getTime(dbTime) } ${ getDate(dbDate) } Все четко!`)
 											: bot.sendMessage(user.chat_id, `Епрст чувак данные о вечернем событии отсутствуют!`)
 									}
-									
-									db.detach()
 								}
 							)
 						})
