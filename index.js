@@ -16,8 +16,8 @@ eveningRule.hour = 17
 eveningRule.minute = 30
 
 eveningFridayRule.dayOfWeek = [5]
-eveningRule.hour = 16
-eveningRule.minute = 15
+eveningFridayRule.hour = 16
+eveningFridayRule.minute = 15
 
 schedule.scheduleJob(morningRule, function() {
 	pgPool.connect((connErr, client, done) => {
@@ -80,11 +80,11 @@ schedule.scheduleJob(morningRule, function() {
 })
 
 schedule.scheduleJob(eveningRule, function() {
-	checkEveningEvent('anotherDay')
+	checkEveningEvent()
 })
 
 schedule.scheduleJob(eveningFridayRule, function() {
-	checkEveningEvent('friday')
+	checkEveningEvent()
 })
 
 const bot = new telegramApi(token, { polling: true })
@@ -340,7 +340,7 @@ bot.on('callback_query', async msg => {
 	})
 })
 
-const checkEveningEvent = day => {
+const checkEveningEvent = () => {
 	pgPool.connect((connErr, client, done) => {
 		if (connErr) return console.log(connErr)
 		
@@ -352,7 +352,7 @@ const checkEveningEvent = day => {
 					done()
 					for (let user of result.rows) {
 						fireBirdPool.get(function(err, db) {
-							console.log('Вечерняя проверка: ' + day)
+							console.log('Вечерняя проверка')
 							if (err) {
 								console.log(err)
 								return bot.sendMessage(user.chat_id, `Что то пошло не так при вечерней проверке... сорян`)
@@ -379,14 +379,15 @@ const checkEveningEvent = day => {
 									let dbDate = new Date(result[0].DATE_EV)
 									let dbTime = new Date(result[0].TIME_EV)
 									
+									const dayOfWeek = dbTime.getDay()
 									const hours = validPad(dbTime.getHours())
 									const minutes = validPad(dbTime.getMinutes())
 									
-									if (day === 'anotherDay') {
+									if (dayOfWeek !== 5) {
 										hours >= 17 && minutes >= 15
 											? bot.sendMessage(user.chat_id, `Выдыхай! Твое вечернее время сегодня: ${ getTime(dbTime) } ${ getDate(dbDate) } Все четко!`)
 											: bot.sendMessage(user.chat_id, `Епрст чувак данные о вечернем событии отсутствуют!`)
-									} else if (day === 'friday') {
+									} else {
 										hours >= 16 && minutes >= 0
 											? bot.sendMessage(user.chat_id, `Выдыхай! Твое вечернее время сегодня: ${ getTime(dbTime) } ${ getDate(dbDate) } Все четко!`)
 											: bot.sendMessage(user.chat_id, `Епрст чувак данные о вечернем событии отсутствуют!`)
