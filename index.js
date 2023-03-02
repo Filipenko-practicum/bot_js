@@ -80,11 +80,11 @@ schedule.scheduleJob(morningRule, function() {
 })
 
 schedule.scheduleJob(eveningRule, function() {
-	checkEveningEvent()
+	checkEveningEvent('anotherDay')
 })
 
 schedule.scheduleJob(eveningFridayRule, function() {
-	checkEveningEvent()
+	checkEveningEvent('friday')
 })
 
 const bot = new telegramApi(token, { polling: true })
@@ -340,7 +340,7 @@ bot.on('callback_query', async msg => {
 	})
 })
 
-const checkEveningEvent = () => {
+const checkEveningEvent = day => {
 	pgPool.connect((connErr, client, done) => {
 		if (connErr) return console.log(connErr)
 		
@@ -352,7 +352,7 @@ const checkEveningEvent = () => {
 					done()
 					for (let user of result.rows) {
 						fireBirdPool.get(function(err, db) {
-							console.log('Вечерняя проверка')
+							console.log('Вечерняя проверка: ' + day)
 							if (err) {
 								console.log(err)
 								return bot.sendMessage(user.chat_id, `Что то пошло не так при вечерней проверке... сорян`)
@@ -379,15 +379,14 @@ const checkEveningEvent = () => {
 									let dbDate = new Date(result[0].DATE_EV)
 									let dbTime = new Date(result[0].TIME_EV)
 									
-									const dayOfWeek = dbTime.getDay()
 									const hours = validPad(dbTime.getHours())
 									const minutes = validPad(dbTime.getMinutes())
 									
-									if (dayOfWeek !== 5) {
+									if (day === 'anotherDay') {
 										hours >= 17 && minutes >= 15
 											? bot.sendMessage(user.chat_id, `Выдыхай! Твое вечернее время сегодня: ${ getTime(dbTime) } ${ getDate(dbDate) } Все четко!`)
 											: bot.sendMessage(user.chat_id, `Епрст чувак данные о вечернем событии отсутствуют!`)
-									} else {
+									} else if (day === 'friday') {
 										hours >= 16 && minutes >= 0
 											? bot.sendMessage(user.chat_id, `Выдыхай! Твое вечернее время сегодня: ${ getTime(dbTime) } ${ getDate(dbDate) } Все четко!`)
 											: bot.sendMessage(user.chat_id, `Епрст чувак данные о вечернем событии отсутствуют!`)
