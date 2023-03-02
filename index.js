@@ -5,14 +5,19 @@ const telegramApi = require('node-telegram-bot-api')
 const schedule = require('node-schedule')
 const morningRule = new schedule.RecurrenceRule()
 const eveningRule = new schedule.RecurrenceRule()
+const eveningFridayRule = new schedule.RecurrenceRule()
 
 morningRule.dayOfWeek = [1, 2, 3, 4, 5]
 morningRule.hour = 8
 morningRule.minute = 30
 
-eveningRule.dayOfWeek = [1, 2, 3, 4, 5]
+eveningRule.dayOfWeek = [1, 2, 3, 4]
 eveningRule.hour = 17
 eveningRule.minute = 30
+
+eveningFridayRule.dayOfWeek = [5]
+eveningRule.hour = 16
+eveningRule.minute = 15
 
 schedule.scheduleJob(morningRule, function() {
 	pgPool.connect((connErr, client, done) => {
@@ -72,66 +77,11 @@ schedule.scheduleJob(morningRule, function() {
 })
 
 schedule.scheduleJob(eveningRule, function() {
-	pgPool.connect((connErr, client, done) => {
-		if (connErr) return console.log(connErr)
-		
-		const query = `select staff_id, chat_id from bot_info`
-		client
-			.query(query)
-			.then(
-				result => {
-						done()
-						for (let user of result.rows) {
-							fireBirdPool.get(function(err, db) {
-								console.log('Вечерняя проверка')
-								if (err) {
-									console.log(err)
-									return bot.sendMessage(user.chat_id, `Что то пошло не так при вечерней проверке... сорян`)
-								}
-								
-								let query = `select first 1
-											reg_events.staff_id,
-											reg_events.date_ev,
-											reg_events.time_ev
-											from reg_events
-											where staff_id = ${ user.staff_id }
-											and date_ev = current_date
-											order by id_reg desc`
-								
-								db.query(query,
-									function(err, result) {
-										if (err) return bot.sendMessage(user.chat_id, `Упс ...Ошибка при получении вечернего события`)
-										if (!result.length) return bot.sendMessage(user.chat_id, `Епрст чувак данные о вечернем событии в базе отсутствуют!`)
-										
-										let dbDate = new Date(result[0].DATE_EV)
-										let dbTime = new Date(result[0].TIME_EV)
-										
-										const dayOfWeek = dbTime.getDay()
-										const hours = validPad(dbTime.getHours())
-										const minutes = validPad(dbTime.getMinutes())
-										
-										if (dayOfWeek !== 5) {
-											hours >= 17 && minutes >= 15
-												? bot.sendMessage(user.chat_id, `Выдыхай! Твое вечернее время сегодня: ${ getTime(dbTime) } ${ getDate(dbDate) } Все четко!`)
-												: bot.sendMessage(user.chat_id, `Епрст чувак данные о вечернем событии отсутствуют!`)
-										} else {
-											hours >= 16 && minutes >= 0
-												? bot.sendMessage(user.chat_id, `Выдыхай! Твое вечернее время сегодня: ${ getTime(dbTime) } ${ getDate(dbDate) } Все четко!`)
-												: bot.sendMessage(user.chat_id, `Епрст чувак данные о вечернем событии отсутствуют!`)
-										}
-										
-										db.detach()
-									}
-								)
-							})
-						}
-				})
-			.catch(e => {
-				done()
-				console.log(e)
-			})
-			
-	})
+	checkEveningEvent()
+})
+
+schedule.scheduleJob(eveningFridayRule, function() {
+	checkEveningEvent()
 })
 
 const bot = new telegramApi(token, { polling: true })
@@ -194,20 +144,15 @@ bot.on('message', async msg => {
 	return bot.sendMessage(chatId, 'Я тебя не понимаю')
 })
 
-/*bot.onText(/set_staff_id (.+)/, function (msg, match) {
-	let userId = msg.from.id;
-	let text = match[1];
-	console.log(text)
-	bot.sendMessage(userId, '!');
-});*/
-
 bot.on('callback_query', async msg => {
 	const event = msg.data;
 	const chatId = msg.message.chat.id;
-	console.log(msg.from.username)
+	console.log(`Действие от ${ msg.from.username }: ${ event }`)
+	console.log(new Date(Date.UTC(0, 0, 0, 5, 0, 0)).toLocaleString())
 	
 	pgPool.connect((connErr, client, done) => {
-		if (connErr) return bot.sendMessage(chatId, `Что то не при подключении к бд... беда!`)
+		if (connErr)
+			return bot.sendMessage(chatId, `Что то не при подключении к бд... беда!`)
 	
 		const query = `select staff_id from bot_info where tg_username = '${ msg.from.username }'`
 		client
@@ -215,28 +160,33 @@ bot.on('callback_query', async msg => {
 			.then(
 				result => {
 					done()
-					if (!result.rows.length) return bot.sendMessage(chatId, `Походу друг у тебя нет прав на пользование`)
+					if (!result.rows.length)
+						return bot.sendMessage(chatId, `Походу друг у тебя нет прав`)
 					
 					const staffId = result.rows[0].staff_id
-					
-					console.log(new Date())
-					console.log(event)
+					console.log(`Получен раб. id: ${ staffId }`)
 					
 					if (event === 'morningEvent' || event === 'eveningEvent' || event === 'lastEvent') {
 						
 						fireBirdPool.get(function(err, db) {
-							console.log(event)
 							if (err) {
 								console.log(err)
-								return bot.sendMessage(chatId, `Упс... при получении времени`)
+								return bot.sendMessage(chatId, `Упс... отсутствует подключение к бд`)
 							}
 							
 							let orderType, msgType, checkDateEvent = 'and date_ev = current_date', today = ' сегодня'
 							let eveningDate = new Date(), now = new Date()
 							eveningDate.setHours(17, 15)
+							let dayOfWeekNow = now.getDay()
 							
 							if (event === 'eveningEvent' && now <= eveningDate) {
+								db.detach()
 								return bot.sendMessage(chatId, `Чувак, день еще не закончен`)
+							}
+							
+							if (event !== 'lastEvent' && (dayOfWeekNow === 6 || dayOfWeekNow === 0)) {
+								db.detach()
+								return bot.sendMessage(chatId, `Выходные же... че балуешься`)
 							}
 							
 							if (event === 'morningEvent') {
@@ -261,16 +211,22 @@ bot.on('callback_query', async msg => {
 					                ${ checkDateEvent }
 					                order by ${ orderType }`,
 								function(err, result) {
-									console.log(err)
+									if (err) {
+										console.log(err)
+										db.detach()
+										return bot.sendMessage(chatId, `Упс... Ошибка при получении времени из базы`)
+									}
 									console.log(result)
-									if (err) return bot.sendMessage(chatId, `Упс... Ошибка при получении времени из базы`)
-									if (!result.length) return bot.sendMessage(chatId, `Епрст... Данные в базе на сегодня отсутствуют`)
+									if (!result.length)
+										return bot.sendMessage(chatId, `Епрст... Данные в базе на сегодня отсутствуют`)
 									
 									let dbDate = new Date(result[0].DATE_EV)
 									let dbTime = new Date(result[0].TIME_EV)
-									
-									bot.sendMessage(chatId, `Твое ${ msgType } время${ today }: ${ getTime(dbTime) } ${ getDate(dbDate) }`)
 									db.detach()
+									
+									return bot.sendMessage(
+										chatId,
+										`Твое ${ msgType } время${ today }: ${ getTime(dbTime) } ${ getDate(dbDate) }`)
 								})
 						});
 					}
@@ -279,7 +235,7 @@ bot.on('callback_query', async msg => {
 						fireBirdPool.get(function(err, db) {
 							if (err) {
 								console.log(err)
-								return bot.sendMessage(chatId, `Упс... Ошибка при создании события`)
+								return bot.sendMessage(chatId, `Упс... отсутствует подключение к бд`)
 							}
 							
 							let today = new Date()
@@ -292,28 +248,27 @@ bot.on('callback_query', async msg => {
 							console.log(dayOfWeekNow, hoursNow, minutesNow, secondsNow)
 							
 							if (hoursNow >= 8 && hoursNow <= 9) {
+								hours = 8
 								if (minutesNow > 25) {
-									hours = 8
 									minutes = getRandom(20, 25)
 									seconds = getRandom(5, 55)
-								} else {
-									hours = 8
-									minutes = minutesNow
-									seconds = secondsNow
 								}
 							} else {
-								if (dayOfWeekNow !== 5) {
+								if (dayOfWeekNow >= 1 && dayOfWeekNow <= 4) {
 									if  (hoursNow > 17 || (hoursNow === 17 && minutesNow > 20)) {
 										hours = 17
 										minutes = getRandom(20, 35)
 										seconds = getRandom(5, 55)
 									}
-								} else {
+								} else if (dayOfWeekNow === 5) {
 									if  (hoursNow > 16 || (hoursNow === 16 && minutesNow > 5)) {
 										hours = 16
 										minutes = getRandom(5, 15)
 										seconds = getRandom(5, 55)
 									}
+								} else {
+									db.detach()
+									return bot.sendMessage(chatId, `Выходные же... че балуешься`)
 								}
 							}
 							
@@ -362,15 +317,14 @@ bot.on('callback_query', async msg => {
 									(select max(subdiv_id) from staff_ref where staff_id = ${ staffId })
 							);`
 							
-							//console.log(query)
-							
 							db.query(query,
 								function(err, result) {
-									console.log(err)
-									if (err) return bot.sendMessage(chatId, `Упс... Ошибка при создании события`)
-									
-									bot.sendMessage(chatId, `Успешный успех! Время ${ timeEv } ${ dateEv }`)
+									if (err) {
+										console.log(err)
+										return bot.sendMessage(chatId, `Упс... Ошибка при создании события`)
+									}
 									db.detach()
+									return bot.sendMessage(chatId, `Успешный успех! Время ${ timeEv } ${ dateEv }`)
 								}
 							)
 							
@@ -385,6 +339,69 @@ bot.on('callback_query', async msg => {
 		
 	})
 })
+
+const checkEveningEvent = () => {
+	pgPool.connect((connErr, client, done) => {
+		if (connErr) return console.log(connErr)
+		
+		const query = `select staff_id, chat_id from bot_info`
+		client
+			.query(query)
+			.then(
+				result => {
+					done()
+					for (let user of result.rows) {
+						fireBirdPool.get(function(err, db) {
+							console.log('Вечерняя проверка')
+							if (err) {
+								console.log(err)
+								return bot.sendMessage(user.chat_id, `Что то пошло не так при вечерней проверке... сорян`)
+							}
+							
+							let query = `select first 1
+											reg_events.staff_id,
+											reg_events.date_ev,
+											reg_events.time_ev
+											from reg_events
+											where staff_id = ${ user.staff_id }
+											and date_ev = current_date
+											order by id_reg desc`
+							
+							db.query(query,
+								function(err, result) {
+									if (err) return bot.sendMessage(user.chat_id, `Упс ...Ошибка при получении вечернего события`)
+									if (!result.length) return bot.sendMessage(user.chat_id, `Епрст чувак данные о вечернем событии в базе отсутствуют!`)
+									
+									let dbDate = new Date(result[0].DATE_EV)
+									let dbTime = new Date(result[0].TIME_EV)
+									
+									const dayOfWeek = dbTime.getDay()
+									const hours = validPad(dbTime.getHours())
+									const minutes = validPad(dbTime.getMinutes())
+									
+									if (dayOfWeek !== 5) {
+										hours >= 17 && minutes >= 15
+											? bot.sendMessage(user.chat_id, `Выдыхай! Твое вечернее время сегодня: ${ getTime(dbTime) } ${ getDate(dbDate) } Все четко!`)
+											: bot.sendMessage(user.chat_id, `Епрст чувак данные о вечернем событии отсутствуют!`)
+									} else {
+										hours >= 16 && minutes >= 0
+											? bot.sendMessage(user.chat_id, `Выдыхай! Твое вечернее время сегодня: ${ getTime(dbTime) } ${ getDate(dbDate) } Все четко!`)
+											: bot.sendMessage(user.chat_id, `Епрст чувак данные о вечернем событии отсутствуют!`)
+									}
+									
+									db.detach()
+								}
+							)
+						})
+					}
+				})
+			.catch(e => {
+				done()
+				console.log(e)
+			})
+		
+	})
+}
 
 function getRandom(min, max) {
 	return Math.floor(Math.random()  * (max - min)) + min
