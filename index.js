@@ -341,6 +341,7 @@ bot.on('callback_query', async msg => {
 })
 
 const checkEveningEvent = () => {
+	console.log((new Date()).toLocaleDateString())
 	pgPool.connect((connErr, client, done) => {
 		if (connErr) return console.log(connErr)
 		
@@ -378,8 +379,9 @@ const checkEveningEvent = () => {
 									
 									let dbDate = new Date(result[0].DATE_EV)
 									let dbTime = new Date(result[0].TIME_EV)
+									//console.log(getDate(dbDate), getTime(dbTime))
 									
-									const dayOfWeek = dbTime.getDay()
+									const dayOfWeek = dbDate.getDay()
 									const hours = validPad(dbTime.getHours())
 									const minutes = validPad(dbTime.getMinutes())
 									
@@ -390,7 +392,7 @@ const checkEveningEvent = () => {
 									} else {
 										hours >= 16 && minutes >= 0
 											? bot.sendMessage(user.chat_id, `Выдыхай! Твое вечернее время сегодня: ${ getTime(dbTime) } ${ getDate(dbDate) } Все четко!`)
-											: bot.sendMessage(user.chat_id, `Епрст чувак данные о вечернем событии отсутствуют!`)
+											: bot.sendMessage(user.chat_id, `Епрст чувак данные о пятничнем вечернем событии отсутствуют!`)
 									}
 								}
 							)
