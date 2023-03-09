@@ -1,8 +1,8 @@
-const { token } = require("./token")
-const { fireBirdPool } = require("./firebird")
-const { pgPool } = require("./postgres")
-const telegramApi = require('node-telegram-bot-api')
-const schedule = require('node-schedule')
+import { token } from './token.js'
+import { fireBirdPool } from './firebird.js'
+import { pgPool } from './postgres.js'
+import telegramApi from 'node-telegram-bot-api'
+import schedule from 'node-schedule'
 const morningRule = new schedule.RecurrenceRule()
 const eveningRule = new schedule.RecurrenceRule()
 const eveningFridayRule = new schedule.RecurrenceRule()
