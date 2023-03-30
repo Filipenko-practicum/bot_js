@@ -62,7 +62,7 @@ schedule.scheduleJob(morningRule, function() {
 									const hours = validPad(dbTime.getHours())
 									const minutes = validPad(dbTime.getMinutes())
 									
-									hours <= 8 && minutes <= 30
+									(hours === 8 && minutes <= 30) || (hours < 8)
 										? bot.sendMessage(user.chat_id, `Выдыхай! Твое утреннее время сегодня: ${ getTime(dbTime) } ${ getDate(dbDate) } Все четко!`)
 										: bot.sendMessage(user.chat_id, `Епрст чувак данные об утреннем событии отсутствуют!`)
 									
