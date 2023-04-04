@@ -2,10 +2,10 @@ import { token } from './token.js'
 import { fireBirdPool } from './firebird.js'
 import { pgPool } from './postgres.js'
 import TelegramApi from 'node-telegram-bot-api'
-import schedule from 'node-schedule'
-const morningRule = new schedule.RecurrenceRule()
-const eveningRule = new schedule.RecurrenceRule()
-const eveningFridayRule = new schedule.RecurrenceRule()
+import Schedule from 'node-schedule'
+const morningRule = new Schedule.RecurrenceRule()
+const eveningRule = new Schedule.RecurrenceRule()
+const eveningFridayRule = new Schedule.RecurrenceRule()
 
 morningRule.dayOfWeek = [ 1, 2, 3, 4, 5 ]
 morningRule.hour = 8
@@ -35,16 +35,15 @@ const checkTimeAndSendMessage = (chat_id, staff_id, event, eventTimeStr, eventTi
 			? hours >= 17 && minutes >= 15 ? successMsg : errorMsg
 			: hours >= 16 && minutes >= 0 ? successMsg : errorMsg
 	
-	sendMessage(chat_id, message)
+	bot.sendMessage(chat_id, message)
 }
-
 const timeCheck = ({ chat_id, staff_id }, event) => {
 	const eventTimeStr = event === 'morning' ? 'утренней' : 'вечерней'
 	const eventTimeStrDeclension = event === 'morning' ? 'утреннем' : 'вечернем'
 	
 	fireBirdPool.get((err, db) => {
 		if (err) {
-			return sendMessage(chat_id, `Что то пошло не так при ${ eventTimeStr } проверке... сорян`)
+			return bot.sendMessage(chat_id, `Что то пошло не так при ${ eventTimeStr } проверке... сорян`)
 		}
 		
 		let query = `select first 1 reg_events.staff_id, reg_events.date_ev, reg_events.time_ev from reg_events
@@ -54,11 +53,11 @@ const timeCheck = ({ chat_id, staff_id }, event) => {
 			db.detach()
 			
 			if (err) {
-				return sendMessage(chat_id, `Упс ...Ошибка при получении ${ eventTimeStr } события`)
+				return bot.sendMessage(chat_id, `Упс ...Ошибка при получении ${ eventTimeStr } события`)
 			}
 			
 			if (!result.length) {
-				return sendMessage(chat_id, `Епрст чувак данные о ${ eventTimeStrDeclension } событии в базе отсутствуют!`)
+				return bot.sendMessage(chat_id, `Епрст чувак данные о ${ eventTimeStrDeclension } событии в базе отсутствуют!`)
 			}
 			
 			const [ dbEvent ] = result
@@ -66,7 +65,6 @@ const timeCheck = ({ chat_id, staff_id }, event) => {
 		})
 	})
 }
-
 const scheduleTimeCheck = async (event) => {
 	try {
 		const client = await pgPool.connect()
@@ -80,18 +78,16 @@ const scheduleTimeCheck = async (event) => {
 	}
 }
 
-schedule.scheduleJob(morningRule, async () => scheduleTimeCheck('morning'))
-schedule.scheduleJob(eveningRule, async () => scheduleTimeCheck('evening'))
-schedule.scheduleJob(eveningFridayRule, async () => scheduleTimeCheck('evening'))
+Schedule.scheduleJob(morningRule, async () => scheduleTimeCheck('morning'))
+Schedule.scheduleJob(eveningRule, async () => scheduleTimeCheck('evening'))
+Schedule.scheduleJob(eveningFridayRule, async () => scheduleTimeCheck('evening'))
 
-const { on, sendMessage, setMyCommands } = new TelegramApi(token, { polling: true })
-
-setMyCommands([
+const bot = new  TelegramApi(token, { polling: true })
+bot.setMyCommands([
 	{ command: '/start', description: 'старт'},
 	{ command: '/info', description: 'инфо'},
 	{ command: '/actions', description: 'действия'},
 ]);
-
 const botActions = {
 	reply_markup: JSON.stringify({
 		inline_keyboard: [
@@ -102,19 +98,17 @@ const botActions = {
 		]
 	})
 }
-
-on('message', msg => {
+bot.on('message', msg => {
 	const text = msg.text;
 	const chatId = msg.chat.id;
 	switch (text) {
-		case '/start': return sendMessage(chatId, 'Привяу')
-		case '/info': return sendMessage(chatId, 'Я простой бот, че с меня взять')
-		case '/actions': return sendMessage(chatId, 'Ты запросил доступные действия, лови:', botActions)
-		default: return sendMessage(chatId, 'Я тебя не понимаю')
+		case '/start': return bot.sendMessage(chatId, 'Привяу')
+		case '/info': return bot.sendMessage(chatId, 'Я простой бот, че с меня взять')
+		case '/actions': return bot.sendMessage(chatId, 'Ты запросил доступные действия, лови:', botActions)
+		default: return bot.sendMessage(chatId, 'Я тебя не понимаю')
 	}
 })
-
-on('callback_query', async msg => {
+bot.on('callback_query', async msg => {
 	const event = msg.data
 	const chatId = msg.message.chat.id
 	
@@ -123,7 +117,7 @@ on('callback_query', async msg => {
 	
 	pgPool.connect((connErr, client, done) => {
 		if (connErr)
-			return sendMessage(chatId, `Что то не при подключении к бд... беда!`)
+			return bot.sendMessage(chatId, `Что то не при подключении к бд... беда!`)
 	
 		const query = `select staff_id from bot_info where tg_username = '${ msg.from.username }'`
 		client
@@ -132,24 +126,24 @@ on('callback_query', async msg => {
 				result => {
 					done()
 					if (!result.rows.length)
-						return sendMessage(chatId, `Походу друг у тебя нет прав`)
+						return bot.sendMessage(chatId, `Походу друг у тебя нет прав`)
 					
 					const staffId = result.rows[0].staff_id
 					console.log(`Получен раб. id: ${ staffId }`)
 					
 					if (event === 'morningEvent' || event === 'eveningEvent' || event === 'lastEvent') {
 						
-						let orderType, msgType, checkDateEvent = 'and date_ev = current_date', today = ' сегодня'
+						let orderType, msgType, checkDateEvent = 'and date_ev = current_date', today = 'сегодня'
 						let eveningDate = new Date(), now = new Date()
 						eveningDate.setHours(17, 15)
 						let dayOfWeekNow = now.getDay()
 						
 						if (event === 'eveningEvent' && now <= eveningDate) {
-							return sendMessage(chatId, `Чувак, день еще не закончен`)
+							return bot.sendMessage(chatId, `Чувак, день еще не закончен`)
 						}
 						
 						if (event !== 'lastEvent' && (dayOfWeekNow === 6 || dayOfWeekNow === 0)) {
-							return sendMessage(chatId, `Выходные же... не балуйся`)
+							return bot.sendMessage(chatId, `Выходные же... не балуйся`)
 						}
 						
 						if (event === 'morningEvent') {
@@ -168,7 +162,7 @@ on('callback_query', async msg => {
 						fireBirdPool.get(function(err, db) {
 							if (err) {
 								console.log(err)
-								return sendMessage(chatId, `Упс... отсутствует подключение к бд`)
+								return bot.sendMessage(chatId, `Упс... отсутствует подключение к бд`)
 							}
 							
 							db.query(`select first 1
@@ -184,20 +178,19 @@ on('callback_query', async msg => {
 									
 									if (err) {
 										console.log(err)
-										return sendMessage(chatId, `Упс... Ошибка при получении времени из базы`)
+										return bot.sendMessage(chatId, `Упс... Ошибка при получении времени из базы`)
 									}
 									
 									if (!result.length) {
-										return sendMessage(chatId, `Епрст... Данные в базе на сегодня отсутствуют`)
+										return bot.sendMessage(chatId, `Епрст... Данные в базе на сегодня отсутствуют`)
 									}
 									
 									let dbDate = new Date(result[0].DATE_EV)
 									let dbTime = new Date(result[0].TIME_EV)
 									console.log(`Найденное время ${ getTime(dbTime) } ${ getDate(dbDate) }`)
 									
-									return sendMessage(
-										chatId,
-										`Твое ${ msgType } время ${ today }: ${ getTime(dbTime) } ${ getDate(dbDate) }`)
+									bot.sendMessage(chatId,
+									`Твое ${ msgType } время ${ today }: ${ getTime(dbTime) } ${ getDate(dbDate) }`)
 								})
 						});
 					}
@@ -231,7 +224,7 @@ on('callback_query', async msg => {
 									seconds = getRandom(5, 55)
 								}
 							} else {
-								return sendMessage(chatId, `Выходные же... не балуйся`)
+								return bot.sendMessage(chatId, `Выходные же... не балуйся`)
 							}
 						}
 						
@@ -247,7 +240,7 @@ on('callback_query', async msg => {
 						fireBirdPool.get(function(err, db) {
 							if (err) {
 								console.log(err)
-								return sendMessage(chatId, `Упс... отсутствует подключение к бд`)
+								return bot.sendMessage(chatId, `Упс... отсутствует подключение к бд`)
 							}
 							
 							let query = `INSERT INTO REG_EVENTS (
@@ -291,9 +284,9 @@ on('callback_query', async msg => {
 									db.detach()
 									if (err) {
 										console.log(err)
-										return sendMessage(chatId, `Упс... Ошибка при создании события`)
+										return bot.sendMessage(chatId, `Упс... Ошибка при создании события`)
 									}
-									return sendMessage(chatId, `Успешный успех! Время ${ timeEv } ${ dateEv }`)
+									return bot.sendMessage(chatId, `Успешный успех! Время ${ timeEv } ${ dateEv }`)
 								}
 							)
 							
@@ -303,7 +296,7 @@ on('callback_query', async msg => {
 			.catch(e => {
 				console.log(e)
 				done()
-				return sendMessage(chatId, `Что то пошло не так при идентификации... сорян`)
+				return bot.sendMessage(chatId, `Что то пошло не так при идентификации... сорян`)
 			})
 		
 	})
@@ -312,18 +305,15 @@ on('callback_query', async msg => {
 function getRandom(min, max) {
 	return Math.floor(Math.random()  * (max - min)) + min
 }
-
 function validPad(num) {
 	return String(num).padStart(2, '0')
 }
-
 function getDate(date) {
 	const day = validPad(date.getDate())
 	const month = validPad(date.getMonth() + 1)
 	const year = date.getFullYear()
 	return `${ day }.${ month }.${ year }`
 }
-
 function getTime(date) {
 	const hours = validPad(date.getHours())
 	const minutes = validPad(date.getMinutes())
