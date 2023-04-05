@@ -3,21 +3,22 @@ import { fireBirdPool } from './firebird.js'
 import { pgPool } from './postgres.js'
 import TelegramApi from 'node-telegram-bot-api'
 import Schedule from 'node-schedule'
-const morningRule = new Schedule.RecurrenceRule()
-const eveningRule = new Schedule.RecurrenceRule()
-const eveningFridayRule = new Schedule.RecurrenceRule()
 
-morningRule.dayOfWeek = [ 1, 2, 3, 4, 5 ]
-morningRule.hour = 8
-morningRule.minute = 30
-
-eveningRule.dayOfWeek = [ 1, 2, 3, 4 ]
-eveningRule.hour = 17
-eveningRule.minute = 30
-
-eveningFridayRule.dayOfWeek = [ 5 ]
-eveningFridayRule.hour = 16
-eveningFridayRule.minute = 15
+const rules = [
+	{ days: [ 1, 2, 3, 4, 5 ], hour: 8, minute: 30, event: 'morning' } ,
+	{ days: [ 1, 2, 3, 4 ], hour: 17, minute: 30, event: 'evening' },
+	{ days: [ 5 ], hour: 16, minute: 15 , event: 'evening' }
+]
+const botActions = {
+	reply_markup: JSON.stringify({
+		inline_keyboard: [
+			[ { text: 'Утреннее время' , callback_data: 'morningEvent' } ],
+			[ { text: 'Вечернее время' , callback_data: 'eveningEvent' } ],
+			[ { text: 'Последнее время' , callback_data: 'lastEvent' } ],
+			[ { text: 'Создать событие' , callback_data: 'createEvent' } ],
+		]
+	})
+}
 
 const checkTimeAndSendMessage = (chat_id, staff_id, event, eventTimeStr, eventTimeStrDeclension, dbEvent) => {
 	const dbDate = new Date(dbEvent.DATE_EV)
@@ -78,27 +79,42 @@ const scheduleTimeCheck = async (event) => {
 		console.log(e)
 	}
 }
+const getRandom = (min, max) => {
+	return Math.floor(Math.random()  * (max - min)) + min
+}
+const validPad = (num) => {
+	return String(num).padStart(2, '0')
+}
+const getDate = (date) => {
+	const day = validPad(date.getDate())
+	const month = validPad(date.getMonth() + 1)
+	const year = date.getFullYear()
+	return `${ day }.${ month }.${ year }`
+}
+const getTime = (date) => {
+	const hours = validPad(date.getHours())
+	const minutes = validPad(date.getMinutes())
+	const seconds = validPad(date.getSeconds())
+	return `${ hours }:${ minutes }:${ seconds }`
+}
+const createScheduleRules = (rules) => {
+	rules.forEach(({ days, hour, minute, event }) => {
+		console.log(days, hour, minute, event)
+		let schedule = new Schedule.RecurrenceRule()
+		schedule.dayOfWeek = days
+		schedule.hour = hour
+		schedule.minute = minute
+		Schedule.scheduleJob(schedule, async () => scheduleTimeCheck(event))
+	})
+}
+createScheduleRules(rules)
+const bot = new TelegramApi(token, { polling: true })
 
-Schedule.scheduleJob(morningRule, async () => scheduleTimeCheck('morning'))
-Schedule.scheduleJob(eveningRule, async () => scheduleTimeCheck('evening'))
-Schedule.scheduleJob(eveningFridayRule, async () => scheduleTimeCheck('evening'))
-
-const bot = new  TelegramApi(token, { polling: true })
 bot.setMyCommands([
 	{ command: '/start', description: 'старт'},
 	{ command: '/info', description: 'инфо'},
 	{ command: '/actions', description: 'действия'},
 ])
-const botActions = {
-	reply_markup: JSON.stringify({
-		inline_keyboard: [
-			[ { text: 'Утреннее время' , callback_data: 'morningEvent' } ],
-			[ { text: 'Вечернее время' , callback_data: 'eveningEvent' } ],
-			[ { text: 'Последнее время' , callback_data: 'lastEvent' } ],
-			[ { text: 'Создать событие' , callback_data: 'createEvent' } ],
-		]
-	})
-}
 bot.on('message', msg => {
 	const text = msg.text;
 	const chatId = msg.chat.id;
@@ -302,22 +318,3 @@ bot.on('callback_query', async msg => {
 		
 	})
 })
-
-function getRandom(min, max) {
-	return Math.floor(Math.random()  * (max - min)) + min
-}
-function validPad(num) {
-	return String(num).padStart(2, '0')
-}
-function getDate(date) {
-	const day = validPad(date.getDate())
-	const month = validPad(date.getMonth() + 1)
-	const year = date.getFullYear()
-	return `${ day }.${ month }.${ year }`
-}
-function getTime(date) {
-	const hours = validPad(date.getHours())
-	const minutes = validPad(date.getMinutes())
-	const seconds = validPad(date.getSeconds())
-	return `${ hours }:${ minutes }:${ seconds }`
-}
