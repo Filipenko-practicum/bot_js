@@ -23,11 +23,12 @@ const checkTimeAndSendMessage = (chat_id, staff_id, event, eventTimeStr, eventTi
 	const dbDate = new Date(dbEvent.DATE_EV)
 	const dbTime = new Date(dbEvent.TIME_EV)
 	const dayOfWeek = dbDate.getDay()
-	const hours = validPad(dbTime.getHours())
-	const minutes = validPad(dbTime.getMinutes())
+	const hours = dbTime.getHours()
+	const minutes = dbTime.getMinutes()
+	const lastCheck =  `${ getTime(dbTime) } ${ getDate(dbDate) }`
 	
-	const successMsg = `Выдыхай! Время ${ eventTimeStr } проверки сегодня: ${ getTime(dbTime) } ${ getDate(dbDate) }`
-	const errorMsg = `Епрст чувак данные о ${ eventTimeStrDeclension } событии отсутствуют!`
+	const successMsg = `Выдыхай! Время ${ eventTimeStr } проверки сегодня: ${ lastCheck }`
+	const errorMsg = `Епрст чувак данные о ${ eventTimeStrDeclension } событии отсутствуют! Последнее время ${ lastCheck }`
 	
 	const message = event === 'morning'
 		? (hours === 8 && minutes <= 30) || hours < 8 ? successMsg : errorMsg
@@ -87,7 +88,7 @@ bot.setMyCommands([
 	{ command: '/start', description: 'старт'},
 	{ command: '/info', description: 'инфо'},
 	{ command: '/actions', description: 'действия'},
-]);
+])
 const botActions = {
 	reply_markup: JSON.stringify({
 		inline_keyboard: [
