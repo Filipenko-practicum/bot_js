@@ -19,15 +19,13 @@ const botActions = {
 		]
 	})
 }
-
-const checkTimeAndSendMessage = (chat_id, staff_id, event, eventTimeStr, eventTimeStrDeclension, dbEvent) => {
-	const dbDate = new Date(dbEvent.DATE_EV)
-	const dbTime = new Date(dbEvent.TIME_EV)
+const checkTimeAndSendMessage = (chat_id, staff_id, event, eventTimeStr, eventTimeStrDeclension, { DATE_EV, TIME_EV }) => {
+	const dbDate = new Date(DATE_EV)
+	const dbTime = new Date(TIME_EV)
 	const dayOfWeek = dbDate.getDay()
 	const hours = dbTime.getHours()
 	const minutes = dbTime.getMinutes()
 	const lastCheck =  `${ getTime(dbTime) } ${ getDate(dbDate) }`
-	
 	const successMsg = `Выдыхай! Время ${ eventTimeStr } проверки сегодня: ${ lastCheck }`
 	const errorMsg = `Епрст чувак данные о ${ eventTimeStrDeclension } событии отсутствуют! Последнее время ${ lastCheck }`
 	
@@ -49,7 +47,9 @@ const timeCheck = ({ chat_id, staff_id }, event) => {
 		}
 		
 		let query = `select first 1 reg_events.staff_id, reg_events.date_ev, reg_events.time_ev from reg_events
-						where staff_id = ${ staff_id } and date_ev = current_date order by time_ev`
+						where staff_id = ${ staff_id }
+						and date_ev = current_date
+						order by ${ event === 'morning' ? 'time_ev' : 'id_reg desc'}`
 		
 		db.query(query, (err, result) => {
 			db.detach()
@@ -99,7 +99,6 @@ const getTime = (date) => {
 }
 const createScheduleRules = (rules) => {
 	rules.forEach(({ days, hour, minute, event }) => {
-		console.log(days, hour, minute, event)
 		let schedule = new Schedule.RecurrenceRule()
 		schedule.dayOfWeek = days
 		schedule.hour = hour
@@ -107,8 +106,9 @@ const createScheduleRules = (rules) => {
 		Schedule.scheduleJob(schedule, async () => scheduleTimeCheck(event))
 	})
 }
-createScheduleRules(rules)
 const bot = new TelegramApi(token, { polling: true })
+
+createScheduleRules(rules)
 
 bot.setMyCommands([
 	{ command: '/start', description: 'старт'},
@@ -133,8 +133,9 @@ bot.on('callback_query', async msg => {
 	console.log(new Date(Date.UTC(0, 0, 0, 5, 0, 0)).toLocaleString())
 	
 	pgPool.connect((connErr, client, done) => {
-		if (connErr)
+		if (connErr) {
 			return bot.sendMessage(chatId, `Что то не при подключении к бд... беда!`)
+		}
 	
 		const query = `select staff_id from bot_info where tg_username = '${ msg.from.username }'`
 		client
