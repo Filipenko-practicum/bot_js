@@ -19,7 +19,7 @@ const botActions = {
 		]
 	})
 }
-const checkTimeAndSendMessage = (chat_id, staff_id, event, eventTimeStr, eventTimeStrDeclension, { DATE_EV, TIME_EV }) => {
+const checkTimeAndSendMessage = async (chat_id, staff_id, event, eventTimeStr, eventTimeStrDeclension, { DATE_EV, TIME_EV }) => {
 	const dbDate = new Date(DATE_EV)
 	const dbTime = new Date(TIME_EV)
 	const dayOfWeek = dbDate.getDay()
@@ -35,7 +35,7 @@ const checkTimeAndSendMessage = (chat_id, staff_id, event, eventTimeStr, eventTi
 			? hours >= 17 && minutes >= 15 ? successMsg : errorMsg
 			: hours >= 16 && minutes >= 0 ? successMsg : errorMsg
 	
-	bot.sendMessage(chat_id, message)
+	await bot.sendMessage(chat_id, message)
 }
 const timeCheck = ({ chat_id, staff_id }, event) => {
 	const eventTimeStr = event === 'morning' ? 'утренней' : 'вечерней'
@@ -51,7 +51,7 @@ const timeCheck = ({ chat_id, staff_id }, event) => {
 						and date_ev = current_date
 						order by ${ event === 'morning' ? 'time_ev' : 'id_reg desc'}`
 		
-		db.query(query, (err, result) => {
+		db.query(query, async (err, result) => {
 			db.detach()
 			
 			if (err) {
@@ -63,21 +63,23 @@ const timeCheck = ({ chat_id, staff_id }, event) => {
 			}
 			
 			const [ dbEvent ] = result
-			checkTimeAndSendMessage(chat_id, staff_id, event, eventTimeStr, eventTimeStrDeclension, dbEvent)
+			await checkTimeAndSendMessage(chat_id, staff_id, event, eventTimeStr, eventTimeStrDeclension, dbEvent)
 		})
 	})
 }
 const scheduleTimeCheck = async (event) => {
+	const client = await pgPool.connect()
+	
 	try {
-		const client = await pgPool.connect()
-		const userData = await client.query(`select staff_id, chat_id from bot_info`)
-		client.release()
-		for (const user of userData.rows) {
-			timeCheck(user, event)
+		const { rows } = await client.query(`select staff_id, chat_id from bot_info`)
+		for (const row of rows) {
+			timeCheck(row, event)
 		}
 	} catch (e) {
 		console.log(new Date())
 		console.log(e)
+	} finally {
+		client.release()
 	}
 }
 const getRandom = (min, max) => {
@@ -107,7 +109,7 @@ const createScheduleRules = (rules) => {
 		Schedule.scheduleJob(schedule, async () => scheduleTimeCheck(event))
 	})
 }
-const checkOtherEvent = (event, chatId, staffId) => {
+const checkEvent = (event, chatId, staffId) => {
 	let orderType, msgType, checkDateEvent = 'and date_ev = current_date', today = 'сегодня'
 	let eveningDate = new Date(), now = new Date()
 	eveningDate.setHours(17, 15)
@@ -136,7 +138,6 @@ const checkOtherEvent = (event, chatId, staffId) => {
 	
 	fireBirdPool.get((err, db) => {
 		if (err) {
-			console.log(err)
 			return bot.sendMessage(chatId, `Упс... отсутствует подключение к бд`)
 		}
 		
@@ -148,7 +149,7 @@ const checkOtherEvent = (event, chatId, staffId) => {
 					                where staff_id = ${ staffId }
 					                ${ checkDateEvent }
 					                order by ${ orderType }`,
-			function(err, result) {
+			async function(err, result) {
 				db.detach()
 				
 				if (err) {
@@ -165,12 +166,12 @@ const checkOtherEvent = (event, chatId, staffId) => {
 				let dbTime = new Date(TIME_EV)
 				console.log(`Найденное время ${ getTime(dbTime) } ${ getDate(dbDate) }`)
 				
-				bot.sendMessage(chatId,
+				await bot.sendMessage(chatId,
 					`Твое ${ msgType } время ${ today }: ${ getTime(dbTime) } ${ getDate(dbDate) }`)
 			})
 	})
 }
-const checkCreateEvent = (event, chatId, staffId) => {
+const createEvent = (event, chatId, staffId) => {
 	let today = new Date()
 	let hoursNow = today.getHours()
 	let minutesNow = today.getMinutes()
@@ -213,7 +214,6 @@ const checkCreateEvent = (event, chatId, staffId) => {
 	
 	fireBirdPool.get(function(err, db) {
 		if (err) {
-			console.log(err)
 			return bot.sendMessage(chatId, `Упс... отсутствует подключение к бд`)
 		}
 		
@@ -257,7 +257,6 @@ const checkCreateEvent = (event, chatId, staffId) => {
 			function(err, result) {
 				db.detach()
 				if (err) {
-					console.log(err)
 					return bot.sendMessage(chatId, `Упс... Ошибка при создании события`)
 				}
 				return bot.sendMessage(chatId, `Успешный успех! Время ${ timeEv } ${ dateEv }`)
@@ -270,7 +269,7 @@ const bot = new TelegramApi(token, { polling: true })
 
 createScheduleRules(rules)
 
-bot.setMyCommands([
+await bot.setMyCommands([
 	{ command: '/start', description: 'старт'},
 	{ command: '/info', description: 'инфо'},
 	{ command: '/actions', description: 'действия'},
@@ -291,27 +290,25 @@ bot.on('callback_query', async msg => {
 	
 	console.log(`Действие от ${ msg.from.username }: ${ event }`)
 	console.log(new Date())
+	const client = await pgPool.connect()
 	
 	try {
-		const client = await pgPool.connect()
-		const staffData = await client.query(`select staff_id from bot_info where tg_username = '${ msg.from.username }'`)
-		client.release()
-		
-		if (!staffData.rows.length) {
+		const { rows } = await client.query(`select staff_id from bot_info where tg_username = '${ msg.from.username }'`)
+		if (!rows.length) {
 			return bot.sendMessage(chatId, `Походу у тебя нет прав, одни обязанности`)
 		}
-		const staffId = staffData.rows[0].staff_id
+		const staffId = rows[0].staff_id
 		console.log(`Получен staff id: ${ staffId }`)
 		
 		switch (event) {
 			case 'morningEvent':
 			case 'eveningEvent':
-			case 'lastEvent': return checkOtherEvent(event, chatId, staffId)
-			case 'createEvent': return checkCreateEvent(event, chatId, staffId)
+			case 'lastEvent': return checkEvent(event, chatId, staffId)
+			case 'createEvent': return createEvent(event, chatId, staffId)
 		}
 	} catch (e) {
-		bot.sendMessage(chatId, `Что то пошло не так... ` + e.message )
-		console.log(new Date())
-		console.log(e)
+		await bot.sendMessage(chatId, `Что то пошло не так... ` + e.message )
+	} finally {
+		client.release()
 	}
 })
