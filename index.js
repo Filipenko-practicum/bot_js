@@ -277,6 +277,7 @@ await bot.setMyCommands([
 bot.on('message', msg => {
 	const text = msg.text;
 	const chatId = msg.chat.id;
+	console.log(`chatId = ${ chatId }`)
 	switch (text) {
 		case '/start': return bot.sendMessage(chatId, 'Привяу')
 		case '/info': return bot.sendMessage(chatId, 'Я простой бот, че с меня взять')
