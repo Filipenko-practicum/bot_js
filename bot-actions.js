@@ -115,13 +115,11 @@ export function checkEvent(event, chatId, staffId) {
 }
 
 export function createEvent(chatId, staffId) {
-	console.log(chatId)
 	const { timeEv, dateEv } = createTime.call(this, chatId)
 	console.log(`Сгенерированное время для события ${ timeEv } ${ dateEv }`)
 	const bot = this
 	fireBirdPool.get(function(err, db) {
 		if (err && chatId) {
-			console.log(`Упс... отсутствует подключение к бд`)
 			return bot.sendMessage(chatId, `Упс... отсутствует подключение к бд`)
 		}
 		const query = `INSERT INTO REG_EVENTS (
@@ -164,10 +162,8 @@ export function createEvent(chatId, staffId) {
 			async function(err) {
 				db.detach()
 				if (err && chatId) {
-					console.log(`Упс... Ошибка при создании события`)
 					return bot.sendMessage(chatId, `Упс... Ошибка при создании события`)
 				}
-				console.log(`Успешный успех! Время ${ timeEv } ${ dateEv }`)
 				if (chatId) {
 					return await bot.sendMessage(chatId, `Успешный успех! Время ${timeEv} ${dateEv}`)
 				}
