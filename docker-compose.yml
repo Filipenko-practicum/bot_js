@@ -1,0 +1,11 @@
+version: '3'
+
+services:
+  backend:
+    container_name: mec_bot
+    build:
+      context: ./
+      dockerfile: Dockerfile
+    restart: always
+    ports:
+      - "3030:3030"
