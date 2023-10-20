@@ -88,6 +88,6 @@ async function doFriendEvent(client, event, chatId) {
 }
 
 function getActions(chatId) {
-	const bossChatIds = [ 295452043, 415714111, 430236268 ]
+	const bossChatIds = [ 295452043, 415714111, 430236268, 173400017 ]
 	return bossChatIds.includes(chatId) ? botBossActions : botActions
 }
