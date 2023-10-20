@@ -6,6 +6,8 @@ services:
     build:
       context: ./
       dockerfile: Dockerfile
+    environment:
+      TZ: Asia/Yekaterinburg
     restart: always
     ports:
       - "3030:3030"
