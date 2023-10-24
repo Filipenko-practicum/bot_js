@@ -9,7 +9,7 @@ const bot = new TelegramApi(token, { polling: true })
 onMessage.bind(bot)
 onCallbackQuery.bind(bot)
 onCallbackQuery.bind(bot)
-createScheduleRules.bind(bot)
+createScheduleRules.apply(bot)
 
 await bot.setMyCommands(commands)
 

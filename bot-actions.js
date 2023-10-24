@@ -20,29 +20,29 @@ const checkTimeAndSendMessage = async (bot, chat_id, staff_id, event, eventTimeS
 	await bot.sendMessage(chat_id, message)
 }
 
-export function timeCheck(bot, { chat_id, staff_id }, event) {
+export function timeCheck(bot, user, event) {
+	const { chat_id, staff_id } = user
 	const eventTimeStr = event === 'morning' ? 'утренней' : 'вечерней'
 	const eventTimeStrDeclension = event === 'morning' ? 'утреннем' : 'вечернем'
 	
 	fireBirdPool.get((err, db) => {
 		if (err) {
-			return this.sendMessage(chat_id, `Что то пошло не так при ${ eventTimeStr } проверке... сорян`)
+			return bot.sendMessage(chat_id, `Что то пошло не так при ${ eventTimeStr } проверке... сорян`)
 		}
 		
 		let query = `select first 1 reg_events.staff_id, reg_events.date_ev, reg_events.time_ev from reg_events
 						where staff_id = ${ staff_id }
 						and date_ev = current_date
 						order by ${ event === 'morning' ? 'time_ev' : 'id_reg desc'}`
-		
 		db.query(query, async (err, result) => {
 			db.detach()
 			
 			if (err) {
-				return this.sendMessage(chat_id, `Упс ...Ошибка при получении ${ eventTimeStr } события`)
+				return bot.sendMessage(chat_id, `Упс ...Ошибка при получении ${ eventTimeStr } события`)
 			}
 			
 			if (!result.length) {
-				return this.sendMessage(chat_id, `Епрст чувак данные о ${ eventTimeStrDeclension } событии в базе отсутствуют!`)
+				return bot.sendMessage(chat_id, `Епрст чувак данные о ${ eventTimeStrDeclension } событии в базе отсутствуют!`)
 			}
 			
 			const [ dbEvent ] = result
