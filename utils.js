@@ -47,3 +47,4 @@ export async function executeQuery(client, query) {
 	const { rows } = await client.query(query)
 	return rows
 }
+export const bossChatIds = [ 295452043, 415714111, 430236268, 173400017 ]

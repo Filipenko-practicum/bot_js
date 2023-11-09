@@ -1,4 +1,4 @@
-import { botActions, botBossActions, executeQuery } from "./utils.js";
+import { botActions, botBossActions, executeQuery, bossChatIds } from "./utils.js";
 import { pgPool } from "./postgres.js";
 import { checkEvent, createEvent } from "./bot-actions.js";
 import { createTime } from "./bot-actions.js";
@@ -26,19 +26,21 @@ export async function onCallbackQuery({ data, message, from }) {
 			await doFriendEvent.call(this, client, event, chatId)
 		} else {
 			const userData = await executeQuery(client, `select staff_id from bot_info where tg_username = '${ from.username }'`)
-			const [ user ] = userData
-			if (!user) {
-				return this.sendMessage(chatId, `Походу у тебя нет прав, одни обязанности`)
-			}
-			const { staff_id } = user
-			console.log(`Получен staff id: ${ staff_id }`)
-			
-			switch (event) {
-				case 'morningEvent':
-				case 'eveningEvent':
-				case 'lastEvent': return checkEvent.call(this, event, chatId, staff_id)
-				case 'createEvent': return createEvent.call(this, chatId, staff_id)
-				case 'createFriendEvent': return getFriendStaffId.call(this, chatId, staff_id, client)
+			if (userData.length) {
+				const [ user ] = userData
+				if (!user) {
+					return this.sendMessage(chatId, `Походу у тебя нет прав =p`)
+				}
+				const { staff_id } = user
+				console.log(`Получен staff id: ${ staff_id }`)
+				
+				switch (event) {
+					case 'morningEvent':
+					case 'eveningEvent':
+					case 'lastEvent': return checkEvent.call(this, event, chatId, staff_id)
+					case 'createEvent': return createEvent.call(this, chatId, staff_id)
+					case 'createFriendEvent': return getFriendStaffId.call(this, chatId, staff_id, client)
+				}
 			}
 		}
 	} catch (e) {
@@ -82,12 +84,13 @@ async function doFriendEvent(client, event, chatId) {
 	const [ user ] = userData
 	const friendChatId = user.chat_id
 	const friendName = user.name
-	await createEvent.call(this, friendChatId, friendStaffId)
+	if (friendChatId) {
+		await createEvent.call(this, friendChatId, friendStaffId)
+	}
 	const { timeEv, dateEv } = createTime.call(this, chatId)
 	await this.sendMessage(chatId, `Топчик! Ты создал событие за своего кореша - ${ friendName }! Время ${ timeEv } ${ dateEv }`)
 }
 
 function getActions(chatId) {
-	const bossChatIds = [ 295452043, 415714111, 430236268, 173400017 ]
 	return bossChatIds.includes(chatId) ? botBossActions : botActions
 }
