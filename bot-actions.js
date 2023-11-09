@@ -119,7 +119,7 @@ export function createEvent(chatId, staffId) {
 	console.log(`Сгенерированное время для события ${ timeEv } ${ dateEv }`)
 	const bot = this
 	fireBirdPool.get(function(err, db) {
-		console.log(err)
+		console.log('успешное подключение к бд')
 		if (err && chatId) {
 			return bot.sendMessage(chatId, `Упс... отсутствует подключение к бд`)
 		}
@@ -158,9 +158,10 @@ export function createEvent(chatId, staffId) {
 									'${ dateEv } ${ timeEv } ',
 									(select max(subdiv_id) from staff_ref where staff_id = ${ staffId })
 							);`
-
+		console.log(query)
 		db.query(query,
 			async function(err) {
+				console.log('успешный запрос')
 				console.log(err)
 				db.detach()
 				if (err && chatId) {
