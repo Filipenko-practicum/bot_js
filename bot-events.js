@@ -84,9 +84,7 @@ async function doFriendEvent(client, event, chatId) {
 	const [ user ] = userData
 	const friendChatId = user.chat_id
 	const friendName = user.name
-	if (friendChatId) {
-		await createEvent.call(this, friendChatId, friendStaffId)
-	}
+	await createEvent.call(this, friendChatId, friendStaffId)
 	const { timeEv, dateEv } = createTime.call(this, chatId)
 	await this.sendMessage(chatId, `Топчик! Ты создал событие за своего кореша - ${ friendName }! Время ${ timeEv } ${ dateEv }`)
 }
