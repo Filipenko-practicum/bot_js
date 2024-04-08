@@ -12,7 +12,7 @@ const checkTimeAndSendMessage = async (bot, chat_id, staff_id, event, eventTimeS
 	const errorMsg = `Епрст чувак данные о ${ eventTimeStrDeclension } событии отсутствуют! Последнее время ${ lastCheck }`
 	
 	const message = event === 'morning'
-		? (hours === 8 && minutes <= 30) || hours < 8 ? successMsg : errorMsg
+		? (hours === 8 && minutes <= 25) || hours < 8 ? successMsg : errorMsg
 		: dayOfWeek !== 5
 			? hours >= 17 && minutes >= 15 ? successMsg : errorMsg
 			: hours >= 16 && minutes >= 0 ? successMsg : errorMsg
@@ -24,16 +24,16 @@ export function timeCheck(bot, user, event) {
 	const { chat_id, staff_id } = user
 	const eventTimeStr = event === 'morning' ? 'утренней' : 'вечерней'
 	const eventTimeStrDeclension = event === 'morning' ? 'утреннем' : 'вечернем'
-	
 	fireBirdPool.get((err, db) => {
 		if (err) {
 			return bot.sendMessage(chat_id, `Что то пошло не так при ${ eventTimeStr } проверке... сорян`)
 		}
 		
-		let query = `select first 1 reg_events.staff_id, reg_events.date_ev, reg_events.time_ev from reg_events
+		const query = `select first 1 reg_events.staff_id, reg_events.date_ev, reg_events.time_ev from reg_events
 						where staff_id = ${ staff_id }
 						and date_ev = current_date
 						order by ${ event === 'morning' ? 'time_ev' : 'id_reg desc'}`
+		console.log('query')
 		db.query(query, async (err, result) => {
 			db.detach()
 			
@@ -44,7 +44,7 @@ export function timeCheck(bot, user, event) {
 			if (!result.length) {
 				return bot.sendMessage(chat_id, `Епрст чувак данные о ${ eventTimeStrDeclension } событии в базе отсутствуют!`)
 			}
-			
+			console.log(result)
 			const [ dbEvent ] = result
 			await checkTimeAndSendMessage(bot, chat_id, staff_id, event, eventTimeStr, eventTimeStrDeclension, dbEvent)
 		})

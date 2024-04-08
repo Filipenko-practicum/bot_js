@@ -7,7 +7,8 @@ async function scheduleTimeCheck(bot, event) {
 	const client = await pgPool.connect()
 	
 	try {
-		const { rows } = await client.query(`select staff_id, chat_id from bot_info`)
+		const { rows } = await client.query(`select staff_id, chat_id from bot_info where chat_id is not null`)
+		console.log(rows)
 		for (const row of rows) {
 			timeCheck(bot, row, event)
 		}

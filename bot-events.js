@@ -1,15 +1,21 @@
-import { botActions, botBossActions, executeQuery, bossChatIds } from "./utils.js";
+import { botActions, botBossActions, executeQuery, bossChatIds, botActionLoser, AsusChatIds } from "./utils.js";
 import { pgPool } from "./postgres.js";
 import { checkEvent, createEvent } from "./bot-actions.js";
 import { createTime } from "./bot-actions.js";
 
 export function onMessage({ text, chat }) {
 	const chatId = chat.id;
+	const bossId = bossChatIds.includes(chatId)
 	console.log(`chatId = ${ chatId }`)
 	switch (text) {
 		case '/start': return this.sendMessage(chatId, 'Привяу')
 		case '/info': return this.sendMessage(chatId, 'Я простой бот, че с меня взять')
-		case '/actions': return this.sendMessage(chatId, 'Ты запросил доступные действия, лови:', getActions(chatId))
+		case '/actions':
+			if(bossId){
+				return this.sendMessage(chatId, 'Ты запросил доступные тебе действия, вот их список:', getActions(chatId));
+			} else {
+				return this.sendMessage(chatId, 'Ты запросил доступные действия, лови:', getLowActions(chatId));
+			}
 		default: return this.sendMessage(chatId, 'Я тебя не понимаю')
 	}
 }
@@ -89,6 +95,10 @@ async function doFriendEvent(client, event, chatId) {
 	await this.sendMessage(chatId, `Топчик! Ты создал событие за своего кореша - ${ friendName }! Время ${ timeEv } ${ dateEv }`)
 }
 
-function getActions(chatId) {
-	return bossChatIds.includes(chatId) ? botBossActions : botActions
+function getLowActions(chatId){
+	return AsusChatIds.includes(chatId) ? botActions : botActionLoser
+}
+
+function getActions(chatId){
+	return bossChatIds.includes(chatId) ? botBossActions : botActionLoser
 }
