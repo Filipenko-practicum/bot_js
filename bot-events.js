@@ -1,4 +1,4 @@
-import { botActions, botBossActions, executeQuery, bossChatIds, botActionLoser, AsusChatIds } from "./utils.js";
+import { botActions, botBossActions, executeQuery, bossChatIds, botActionLoser, ASUSChatIds } from "./utils.js";
 import { pgPool } from "./postgres.js";
 import { checkEvent, createEvent } from "./bot-actions.js";
 import { createTime } from "./bot-actions.js";
@@ -139,7 +139,7 @@ async function doFriendEvent(client, event, chatId) {
 }
 
 function getLowActions(chatId){
-	return AsusChatIds.includes(chatId) ? botActions : botActionLoser
+	return ASUSChatIds.includes(chatId) ? botActions : botActionLoser
 }
 
 function getActions(chatId){
