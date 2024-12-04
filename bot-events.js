@@ -3,20 +3,63 @@ import { pgPool } from "./postgres.js";
 import { checkEvent, createEvent } from "./bot-actions.js";
 import { createTime } from "./bot-actions.js";
 
-export function onMessage({ text, chat }) {
+
+async function logToDataBase(chat_id, message) {
+	const client = await pgPool.connect();
+	try {
+		await executeQuery(client, `INSERT INTO bots_logs (chat_id, message, time) VALUES (${chat_id}, '${message.replace(/'/g, "''")}', NOW())`);
+	} catch (error) {
+		console.error('Ошибка при записи лога в БД:', error);
+	} finally {
+		client.release();
+	}
+}
+
+export async function onMessage({ text, chat }) {
 	const chatId = chat.id;
-	const bossId = bossChatIds.includes(chatId)
-	console.log(`chatId = ${ chatId }`)
-	switch (text) {
-		case '/start': return this.sendMessage(chatId, 'Привяу')
-		case '/info': return this.sendMessage(chatId, 'Я простой бот, че с меня взять')
-		case '/actions':
-			if(bossId){
-				return this.sendMessage(chatId, 'Ты запросил доступные тебе действия, вот их список:', getActions(chatId));
-			} else {
-				return this.sendMessage(chatId, 'Ты запросил доступные действия, лови:', getLowActions(chatId));
-			}
-		default: return this.sendMessage(chatId, 'Я тебя не понимаю')
+	const bossId = bossChatIds.includes(chatId);
+	console.log(`chatId = ${chatId}`);
+
+	// Логирование команды
+	const logMessage = `Получена команда: ${text} от чата с ID: ${chatId}`;
+	console.log(logMessage);
+	await logToDataBase(chatId, logMessage); // Записываем лог в БД
+
+	try {
+		switch (text) {
+			case '/start':
+				const startMessage = `Команда /start выполнена для чата с ID: ${chatId}`;
+				console.log(startMessage);
+				await logToDataBase(chatId, startMessage); // Записываем лог в БД
+				return this.sendMessage(chatId, 'Привяу');
+			case '/info':
+				const infoMessage = `Команда /info выполнена для чата с ID: ${chatId}`;
+				console.log(infoMessage);
+				await logToDataBase(chatId, infoMessage); // Записываем лог в БД
+				return this.sendMessage(chatId, 'Я простой бот, че с меня взять');
+			case '/actions':
+				if (bossId) {
+					const actionsMessage = `Команда /actions выполнена для босса в чате с ID: ${chatId}`;
+					console.log(actionsMessage);
+					await logToDataBase(chatId, actionsMessage); // Записываем лог в БД
+					return this.sendMessage(chatId, 'Ты запросил доступные тебе действия, вот их список:', getActions(chatId));
+				} else {
+					const lowActionsMessage = `Команда /actions выполнена для обычного пользователя в чате с ID: ${chatId}`;
+					console.log(lowActionsMessage);
+					await logToDataBase(chatId, lowActionsMessage); // Записываем лог в БД
+					return this.sendMessage(chatId, 'Ты запросил доступные действия, лови:', getLowActions(chatId));
+				}
+			default:
+				const unknownCommandMessage = `Неизвестная команда: ${text} от чата с ID: ${chatId}`;
+				console.log(unknownCommandMessage);
+				await logToDataBase(chatId, unknownCommandMessage); // Записываем лог в БД
+				return this.sendMessage(chatId, 'Я тебя не понимаю');
+		}
+	} catch (error) {
+		const errorMessage = `Ошибка при обработке команды: ${text} от чата с ID: ${chatId}. Ошибка: ${error.message}`;
+		console.error(errorMessage);
+		await logToDataBase(chatId, errorMessage); // Записываем ошибку в БД
+		return this.sendMessage(chatId, 'Произошла ошибка при обработке вашей команды.');
 	}
 }
 
